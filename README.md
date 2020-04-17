@@ -9,6 +9,15 @@ deep learning project with AllenNLP.
 Build the docker container, run the web scrapper and export the mongodb
 data to either csv or json.
 
+!!Its not working yet!!
+
 ```sh
+# to setup without mongo
 docker build -t dataset .
+
+# using docker compose
+docker-compose up -d
+
+# ssh into container
+docker-compose exec app /bin/bash
 ```
