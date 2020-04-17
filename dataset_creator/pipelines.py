@@ -7,6 +7,7 @@
 
 
 import pymongo
+import logging
 
 
 class MongoPipeline(object):
@@ -21,7 +22,7 @@ class MongoPipeline(object):
     def from_crawler(cls, crawler):
         return cls(
             mongo_uri=crawler.settings.get('MONGO_URI'),
-            mongo_db=crawler.settings.get('MONGO_DATABASE', 'items')
+            mongo_db=crawler.settings.get('MONGO_DATABASE')
         )
 
     def open_spider(self, spider):
@@ -33,4 +34,5 @@ class MongoPipeline(object):
 
     def process_item(self, item, spider):
         self.db[self.collection_name].insert_one(dict(item))
+        logging.debug("Post added to MongoDB")
         return item
