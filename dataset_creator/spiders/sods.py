@@ -23,6 +23,6 @@ class SodsSpider(CrawlSpider):
 
             yield item
 
-        next_page = response.css("div.s-pagination>a.s-pagination--item").getall()[-1]
+        next_page = response.css("div.s-pagination>a.s-pagination--item::attr(href)").getall()[-1]
         if next_page is not None:
             yield response.follow(next_page, callback=self.parse)
