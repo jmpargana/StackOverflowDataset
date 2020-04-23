@@ -2,16 +2,13 @@
 help:
 	cat Makefile
 
-build:
-	docker-compose up -d
+all: run stop
 
 run:
-	docker exec -d scrapper_app pipenv run python -m scrapy crawl sods
-
-export:
-	# this command isn't setup for docker yet
-	# mongoexport -h localhost:27017 -d stackoverflowdataset -c stackoverflowdataset -o dataset.json -- jsonArray
+	docker-compose up -d && docker wait scrapper_app && docker exec app mongoexport -d stackoverflowdataset -c stackoverflowdataset -o dataset.json --jsonArray && docker cp app:/dataset.json .
 
 stop:
 	docker stop scrapper_app app || true; docker rm scrapper_app app || true;
 
+
+.PHONY: all
