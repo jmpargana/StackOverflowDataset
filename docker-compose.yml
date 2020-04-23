@@ -15,6 +15,7 @@ services:
 
   app:
     image: scrapper-app
+    container_name: scrapper_app
     build:
       context: .
       dockerfile: Dockerfile
