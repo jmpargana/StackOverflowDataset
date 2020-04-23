@@ -68,7 +68,7 @@ RANDOMIZE_DOWNLOAD_DELAY = True
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {'dataset_creator.pipelines.MongoPipeline': 300}
 
-MONGO_URI = 'mongodb://localhost:27017'
+MONGO_URI = 'mongodb://app:27017'
 MONGO_DATABASE = 'stackoverflowdataset'
 
 # Enable and configure the AutoThrottle extension (disabled by default)
