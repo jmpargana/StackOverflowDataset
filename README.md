@@ -11,4 +11,10 @@ data to either csv or json.
 
 ```sh
 make all
+
+# or
+make build
+make run
+make export
+make stop
 ```
