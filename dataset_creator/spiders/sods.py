@@ -15,14 +15,18 @@ class SodsSpider(CrawlSpider):
             item = QuestionItem()
 
             item["votes"] = int(question.css("div.votes strong::text").get())
-            item["answers"] = int(question.css("div.status strong::text").get())
+            item["answers"] = int(question.css(
+                "div.status strong::text").get())
             item["views"] = int(
                 re.findall(r"\d+", question.css("div.views::text").get())[0]
             )
-            item["question"] = question.css("div.summary>h3>a::text").get()
+            # item["question"] = question.css("div.summary>h3>a::text").get()
+            item["tags"] = question.css("div.tags a.post-tag::text").getall()
 
             yield item
 
-        next_page = response.css("div.s-pagination>a.s-pagination--item::attr(href)").getall()[-1]
+        next_page = response.css(
+            "div.s-pagination>a.s-pagination--item::attr(href)"
+        ).getall()[-1]
         if next_page is not None:
             yield response.follow(next_page, callback=self.parse)

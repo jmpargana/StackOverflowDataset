@@ -10,6 +10,8 @@ pytest = "*"
 [packages]
 scrapy = "*"
 pymongo = "*"
+plotly = "*"
+python-igraph = "*"
 
 [requires]
 python_version = "3.8"

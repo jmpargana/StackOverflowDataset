@@ -9,7 +9,8 @@ from scrapy.item import Item, Field
 
 
 class QuestionItem(Item):
-    question = Field()
+    # question = Field()
     votes = Field()
     answers = Field()
     views = Field()
+    tags = Field()
