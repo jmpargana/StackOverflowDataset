@@ -3,8 +3,8 @@ python:
   - "3.8"
 
 install:
-  - pip install pipenv
-  - pipenv install
+  - pip3 install pipenv
+  - pipenv install --skip-lock
 
 scripts:
-  - pipenv run pytest
+  - pipenv run pytest plotter
