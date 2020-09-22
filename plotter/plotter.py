@@ -13,7 +13,6 @@ class Plotter:
     attr:
         - db (mongo database): Pointer to an opened mongodb database.
         - raw_graph (Graph): Processed data retrieved from db.
-        - G (ig.Graph): Resulting graph to be displayed.
     """
 
     def __init__(self, mongo_uri, max_tags):
@@ -24,6 +23,9 @@ class Plotter:
         """
         Create an instance of a custom graph and pre process
         all data available in the mongodb collection.
+
+        params:
+            - max_tags (int): only the top max_tags will be kept to display.
 
         returns:
             - Graph: an organized structure of how the data
@@ -39,6 +41,13 @@ class Plotter:
     def trim_raw_graph(self, graph, max_tags):
         """
         Sort and only keep top most used tags. Remove remaining nodes and edges.
+
+        params:
+            - graph (Graph): the organized data loaded from the database.
+            - max_tags (int): number of nodes that will be displayed.
+
+        returns:
+            - trimmed graph with only max_tags of nodes.
         """
 
         graph.nodes = {
@@ -57,52 +66,67 @@ class Plotter:
     def mongo_setup(self, mongo_uri):
         """
         Connect to the mongo instance and return the database.
+
+        params:
+            - mongo_uri (str): class is instantiated with string.
+
+        returns:
+            - pointer to mongo database
         """
 
         client = MongoClient(mongo_uri)
         return client["stackoverflowdataset"]
 
     def create_graph(self):
+        """
+        Since igraph stores the graph structure in indexed c-style arrays,
+        all attributes and labels need to be organized similarly.
+        These data is organized, loaded in Scatter3d class from plotly,
+        and the resulting graph is saved in a "plot.html" file which gets
+        automatically opened in the browser if available.
+        """
+
         N = len(self.raw_graph.nodes)
 
-        nodes = list(self.raw_graph.nodes.keys())
-        # max_weight = max([node.weight for node in nodes])
-        max_votes = max([node.votes for node in self.raw_graph.nodes.values()])
-        min_votes = min([node.votes for node in self.raw_graph.nodes.values()])
-        max_views = max([node.views for node in self.raw_graph.nodes.values()])
-        max_answers = max(
-            [node.answers for node in self.raw_graph.nodes.values()])
+        # load all min and max ranges to scale node sizes
+        max_we, min_we = self.minmax_weights()
+        max_vo, min_vo = self.minmax_votes()
+        max_vi, max_an, min_an = self.max_views_answers()
 
-        sizes = [self.raw_graph.nodes[i].weight / 10 + 1 for i in nodes]
+        # igraph stores nodes and edges as C-style arrays indexed by int.
+        # labels and attributes correspond to the ordered indeces.
+        nodes, edges, nodes_labels, edges_labels = self.c_style_arrays()
 
-        edges = [
-            (nodes.index(n1), nodes.index(n2)) for n1, n2 in self.raw_graph.edges.keys()
-        ]
+        # generate sizes and colors of nodes in indexed arrays.
+        sizes, colors = self.attr(
+            nodes, max_we, min_we, max_vo, min_vo, max_vi, max_an, min_an
+        )
 
-        nodes_labels = [
-            node + ": " + str(self.raw_graph.nodes[node].weight) for node in nodes
-        ]
-
-        edges_labels = list(self.raw_graph.edges.values())
-
-        colors = [
-            "rgb({}, {}, {})".format(
-                int(255 * (node.votes - min_votes) / (max_votes - min_votes)),
-                int(node.views / max_views * 255),
-                int(node.answers / max_answers * 255),
-            )
-            for node in self.raw_graph.nodes.values()
-        ]
-
+        # load the data with all c-style arrays.
         data, layout = self.gen_data_layout(
             N, edges, sizes, nodes_labels, edges_labels, colors
         )
 
         fig = go.Figure(data=data, layout=layout)
-
         pio.write_html(fig, "plot.html", auto_open=True)
 
     def gen_data_layout(self, N, edges, sizes, nodes_labels, edges_labels, colors):
+        """
+        This method generates the data containing the coordinates of all nodes
+        and their corresponding edges as well as the layout.
+
+        params:
+            - N (int): number of nodes
+            - edges (list(tuple(int))): list of tuples of indices of nodes.
+            - sizes (list(int)): list of sizes of nodes (according to weight).
+            - nodes_labels (list(str)): list of descriptions of nodes.
+            - edges_labels (list(int)): list of weight of edges.
+            - colors (list(str)): list of rgb colors according to attributes.
+
+        returns:
+            - data (list(Scatter3d)): list of coordinates and attributes.
+            - layout
+        """
         G = ig.Graph(edges, directed=False)
         layt = G.layout("kk", dim=3)
 
@@ -118,6 +142,16 @@ class Plotter:
         return data, layout
 
     def gen_xyzn(self, layt, N):
+        """
+        Generate 3d vector space with amount of nodes in each coordinate.
+
+        params:
+            - layt
+            - N (int): amount of nodes.
+        returns:
+            - Each coordinate.
+        """
+
         Xn = [layt[k][0] for k in range(N)]
         Yn = [layt[k][1] for k in range(N)]
         Zn = [layt[k][2] for k in range(N)]
@@ -125,6 +159,18 @@ class Plotter:
         return Xn, Yn, Zn
 
     def gen_xyze(self, layt, edges):
+        """
+        Create a list of coordinates of the connected nodes by index
+        of coordinates of each node.
+
+        params:
+            - layt
+            - edges (list(tuple(int))): list of edges.
+
+        returns:
+            - three list of all the coordinates per axis.
+        """
+
         Xe = []
         Ye = []
         Ze = []
@@ -137,6 +183,19 @@ class Plotter:
         return Xe, Ye, Ze
 
     def gen_lines(self, Xe, Ye, Ze, edge_labels):
+        """
+        This method generates the edges of the graph.
+
+        params:
+            - Xe (list(int)): list of coordinates of both nodes.
+            - Ye
+            - Ze
+            - edge_labels (list(int)): list of weights per edge.
+
+        returns:
+            - edges (Scatter3d): return all coordinates of edges.
+        """
+
         return go.Scatter3d(
             x=Xe,
             y=Ye,
@@ -148,6 +207,22 @@ class Plotter:
         )
 
     def gen_markers(self, Xn, Yn, Zn, weights, nodes_labels, colors):
+        """
+        Generate nodes with colors, sizes and tags.
+
+        params:
+            - Xn (list(int)): list of coordinates
+            - Yn
+            - Zn
+            - weights (list(int)): list of size in pixels.
+            - nodes_labels (list(str)): list of descriptions.
+            - colors (list(str)): list of colors as rgb strings.
+
+        returns:
+            - nodes (Scatter3d): all nodes in given coordinates with all
+                attributes.
+        """
+
         return go.Scatter3d(
             x=Xn,
             y=Yn,
@@ -166,6 +241,13 @@ class Plotter:
         )
 
     def gen_axis(self):
+        """
+        Generates an axis which will look the same in each coordinate.
+
+        returns:
+            - axis
+        """
+
         return dict(
             showbackground=False,
             showline=False,
@@ -176,6 +258,17 @@ class Plotter:
         )
 
     def gen_layout(self, axis):
+        """
+        Given an axis generate the layout with 3 equal axis, title width and height
+        of screen and legend.
+
+        params:
+            - axis (dict): dictionary of values.
+
+        returns:
+            - layout
+        """
+
         return go.Layout(
             title="Stack Overflow Tags and Their Relations",
             width=1800,
@@ -189,3 +282,133 @@ class Plotter:
             margin=dict(t=50),
             hovermode="closest",
         )
+
+    def minmax_weights(self):
+        """
+        Find min and max weights to normalize size of node in pixels.
+        """
+
+        max_weight = max(
+            [node.weight for node in self.raw_graph.nodes.values()])
+        min_weight = min(
+            [node.weight for node in self.raw_graph.nodes.values()])
+        return max_weight, min_weight
+
+    def minmax_votes(self):
+        """
+        Find min and max votes in nodes to normalize in rgb values.
+        """
+
+        max_votes = max([node.votes for node in self.raw_graph.nodes.values()])
+        min_votes = min([node.votes for node in self.raw_graph.nodes.values()])
+        return max_votes, min_votes
+
+    def max_views_answers(self):
+        """
+        Finds max of views and answers in nodes to normalize in rgb values.
+        """
+
+        max_views = max([node.views for node in self.raw_graph.nodes.values()])
+        max_answers = max(
+            [node.answers for node in self.raw_graph.nodes.values()])
+        min_answers = min(
+            [node.answers for node in self.raw_graph.nodes.values()])
+        return max_views, max_answers, min_answers
+
+    def c_style_arrays(self):
+        """
+        This method generates c-style arrays of nodes, edges and their labels.
+        All indices must correspond to the same node and this step is needed
+        since igraph implements graph this way.
+
+        returns:
+            - nodes (list(str)): array of names of nodes (tags).
+            - edges (list(tuple(int))): list of tuples of indices of nodes.
+            - nodes_labels (list(str)): list of descriptions of nodes.
+            - edges_labels (list(int)): list of weight of edge.
+        """
+        nodes = list(self.raw_graph.nodes.keys())
+
+        edges = [
+            (nodes.index(n1), nodes.index(n2)) for n1, n2 in self.raw_graph.edges.keys()
+        ]
+
+        nodes_labels = [  # Example:
+            node
+            + ": "
+            + str(self.raw_graph.nodes[node].weight)  # Python: 40000
+            + "\nViews: "
+            + str(self.raw_graph.nodes[node].views)  # Views: 50k
+            + "\nAnswers: "
+            + str(self.raw_graph.nodes[node].answers)  # Answers: 250
+            + "\nVotes: "
+            + str(self.raw_graph.nodes[node].votes)  # Votes: 500
+            for node in nodes
+        ]
+
+        edges_labels = list(self.raw_graph.edges.values())
+
+        return nodes, edges, nodes_labels, edges_labels
+
+    def attr(self, nodes, max_we, min_we, max_vo, min_vo, max_vi, max_an, min_an):
+        """
+        This method generates the attributes sizes and colors as c-style arrays.
+        Normalizes to weights so there aren't too big nodes (pixels) or too
+        small. It also generates the rgb colors where each parameter is red,
+        green or blue scaled to fit the values in the dataset.
+
+        paramas:
+            - nodes (list(str)): array of node names.
+            - max_we (int): max weight in nodes.
+            - min_we (int): min weight in nodes.
+            - max_vo (int): max votes in nodes.
+            - min_vo (int): min votes in nodes.
+            - max_vi (int): max views in nodes.
+            - max_an (int): max answers in nodes.
+
+        returns:
+            - sizes (list(int)): array of normalized weight pro node.
+            - colors (list(str)): array of rgb colors reflecting the attributes
+                found in each node.
+        """
+        sizes = [
+            (300 - 30) *
+            (self.raw_graph.nodes[i].weight - min_we) / (max_we - min_we)
+            + 30
+            for i in nodes
+        ]
+
+        colors = [
+            "rgb({}, {}, {})".format(
+                # int(255 * (node.votes - min_vo) / (max_vo - min_vo)),
+                0,
+                70,
+                self.calculate_average_votes_per_view(
+                    node, max_vo, min_vo, max_an, min_an
+                ),
+                # int(node.views / max_vi * 255),
+                # int(node.answers / max_an * 255),
+            )
+            for node in self.raw_graph.nodes.values()
+        ]
+        return sizes, colors
+
+    def calculate_average_votes_per_view(self, node, max_vo, min_vo, max_an, min_an):
+        """
+        From 0 to 255 create the average of sucessfully answered questions in
+        stackoverflow.
+
+        params:
+            - node (int): node with all values.
+            - max_vo (int): max votes.
+            - min_vo (int): min votes.
+            - max_an (int): max answers.
+            - min_an (int): min answers.
+
+        returns:
+            - average 0..255
+        """
+
+        mi = min_vo / min_an
+        ma = max_vo / max_an
+        return int(255 * ((node.votes / node.answers) - mi) / (ma - mi))
