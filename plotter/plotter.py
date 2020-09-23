@@ -333,20 +333,22 @@ class Plotter:
             (nodes.index(n1), nodes.index(n2)) for n1, n2 in self.raw_graph.edges.keys()
         ]
 
-        nodes_labels = [  # Example:
-            node
-            + ": "
-            + str(self.raw_graph.nodes[node].weight)  # Python: 40000
-            + "\nViews: "
-            + str(self.raw_graph.nodes[node].views)  # Views: 50k
-            + "\nAnswers: "
-            + str(self.raw_graph.nodes[node].answers)  # Answers: 250
-            + "\nVotes: "
-            + str(self.raw_graph.nodes[node].votes)  # Votes: 500
+        # Example: Python: 35000 Views: 4500 Answers: 600: Votes: 20
+        nodes_labels = [
+            "{}: {} Views: {} Answers: {} Votes: {}".format(
+                node,
+                str(self.raw_graph.nodes[node].weight),
+                str(self.raw_graph.nodes[node].views),
+                str(self.raw_graph.nodes[node].answers),
+                str(self.raw_graph.nodes[node].votes),
+            )
             for node in nodes
         ]
 
-        edges_labels = list(self.raw_graph.edges.values())
+        edges_labels = [
+            f"{edge[0]} - {edge[1]} - {weight}"
+            for edge, weight in self.raw_graph.edges.items()
+        ]
 
         return nodes, edges, nodes_labels, edges_labels
 
@@ -380,14 +382,11 @@ class Plotter:
 
         colors = [
             "rgb({}, {}, {})".format(
-                # int(255 * (node.votes - min_vo) / (max_vo - min_vo)),
                 0,
                 70,
                 self.calculate_average_votes_per_view(
                     node, max_vo, min_vo, max_an, min_an
                 ),
-                # int(node.views / max_vi * 255),
-                # int(node.answers / max_an * 255),
             )
             for node in self.raw_graph.nodes.values()
         ]
@@ -409,6 +408,4 @@ class Plotter:
             - average 0..255
         """
 
-        mi = min_vo / min_an
-        ma = max_vo / max_an
-        return int(255 * ((node.votes / node.answers) - mi) / (ma - mi))
+        return int(255 * node.votes / node.answers)
